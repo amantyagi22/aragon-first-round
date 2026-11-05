@@ -250,9 +250,11 @@ export function App() {
                   <button
                     type="button"
                     onClick={() => dispatch({ type: 'clearFinished' })}
-                    className="text-xs text-zinc-500 hover:text-zinc-900 active:scale-[0.97]"
+                    aria-label="Hide finished uploads"
+                    title="Hide finished uploads"
+                    className="mr-1 grid size-6 place-items-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-900 active:scale-[0.94]"
                   >
-                    Clear
+                    <X size={14} weight="bold" />
                   </button>
                 )}
               </div>
@@ -301,10 +303,15 @@ export function App() {
                 action={
                   <button
                     type="button"
-                    onClick={() => needsAttention.forEach((i) => remove.mutate(i.id))}
-                    className="text-xs font-normal text-zinc-500 hover:text-zinc-900 active:scale-[0.97]"
+                    onClick={() => {
+                      const n = needsAttention.length;
+                      if (confirm(`Delete ${n} photo${n === 1 ? '' : 's'} that need attention? This can't be undone.`))
+                        needsAttention.forEach((i) => remove.mutate(i.id));
+                    }}
+                    className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-rose-600 transition-colors hover:bg-rose-100 active:scale-[0.97]"
                   >
-                    Remove all
+                    <Trash size={14} />
+                    Delete all
                   </button>
                 }
                 icon={<WarningCircle size={18} weight="fill" className="text-rose-500" />}
