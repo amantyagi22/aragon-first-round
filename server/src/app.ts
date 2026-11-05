@@ -37,7 +37,7 @@ const session: RequestHandler = (req, res, next) => {
 export function createApp() {
   const app = express();
   app.use(helmet());
-  app.use(cors({ origin: process.env.WEB_ORIGIN ?? 'http://localhost:5173', allowedHeaders: ['content-type', 'x-session-id'] }));
+  app.use(cors({ origin: process.env.WEB_ORIGIN ?? 'http://localhost:5180', allowedHeaders: ['content-type', 'x-session-id'] }));
   app.use(express.json({ limit: '32kb' }));
   app.use('/api', rateLimit({ windowMs: 60_000, limit: 600 }), session);
 
