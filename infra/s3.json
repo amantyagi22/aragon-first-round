@@ -1,0 +1,5 @@
+{
+  "identities": [
+    { "name": "app", "credentials": [{ "accessKey": "s3admin", "secretKey": "s3admin123" }], "actions": ["Admin", "Read", "Write", "List", "Tagging"] }
+  ]
+}

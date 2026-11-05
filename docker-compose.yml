@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aragon
+      POSTGRES_PASSWORD: aragon
+      POSTGRES_DB: aragon
+    ports: ["5433:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "aragon"]
+      interval: 2s
+      retries: 20
+
+  # S3-compatible object storage (MinIO no longer publishes images). Bucket is created by the API on boot.
+  s3:
+    image: chrislusf/seaweedfs:latest
+    command: server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data -ip.bind=0.0.0.0
+    ports: ["9000:8333"]
+    volumes: [s3data:/data, ./infra/s3.json:/etc/seaweedfs/s3.json:ro]
+
+volumes:
+  pgdata:
+  s3data:

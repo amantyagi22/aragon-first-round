@@ -1,0 +1,7 @@
+packages:
+  - server
+  - web
+onlyBuiltDependencies:
+  - sharp
+  - esbuild
+  - "@tensorflow/tfjs-node"
