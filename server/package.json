@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --env-file=../.env --import tsx --watch src/api.ts & node --env-file=../.env --import tsx --watch src/worker.ts",
+    "dev": "pnpm run \"/^dev:/\"",
+    "dev:api": "node --env-file=../.env --import tsx --watch src/api.ts",
+    "dev:worker": "node --env-file=../.env --import tsx --watch src/worker.ts",
     "api": "node --env-file=../.env --import tsx src/api.ts",
     "worker": "node --env-file=../.env --import tsx src/worker.ts",
     "migrate": "node --env-file=../.env --import tsx src/migrate.ts",

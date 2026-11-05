@@ -1,20 +1,78 @@
 # Photo upload with validation
 
 Upload photos, validate them asynchronously, and sort them into Accepted and Rejected.
+Built for the Aragon.ai round 1 challenge ([PROBLEM.md](PROBLEM.md)).
 
-## Run
+**Stack:** React + Vite + Tailwind + TanStack Query, Express + Knex, Postgres 16, S3-compatible storage, `sharp` + `heic-convert`, `@vladmandic/face-api` (TF.js WASM).
+
+## Reviewer guide
+
+About 5 minutes from clone to a running app.
+
+### Prerequisites
+
+- Node 22 or newer (`node -v`)
+- pnpm 10 (`corepack enable` or `npm i -g pnpm`)
+- Docker Desktop, running
+
+The app uses these local ports: web 5180, API 4000, Postgres 5433, S3 9000.
+If one is taken, stop whatever is using it (`lsof -i :5180`).
+
+### 1. Install and start
 
 ```sh
-cp .env.example .env
+git clone https://github.com/amantyagi22/aragon-first-round.git
+cd aragon-first-round
+cp .env.example .env     # local-only credentials for the docker services
 pnpm install
-pnpm infra            # Postgres 16 + SeaweedFS (S3-compatible)
-pnpm migrate
-pnpm dev              # API :4000, worker, web :5180
-pnpm test             # server: rule table + API integration + concurrency
+pnpm infra               # starts Postgres 16 + SeaweedFS (S3-compatible) in Docker
+pnpm migrate             # creates the images table, enums, and indexes
+pnpm dev                 # API on :4000, worker, web on :5180 (Ctrl-C stops all three)
 ```
 
-Ports: web on 5180, API on 4000, Postgres on 5433, S3 (SeaweedFS) on 9000.
-Requires Node 22+, pnpm 10, and Docker.
+Open http://localhost:5180.
+
+### 2. Try it
+
+Sample photos covering every rule are in `server/test/fixtures/`.
+Drag them all into the upload box at once:
+
+- `ok-selfie.jpg`, `ok-headshot.png`, `src/selfie.heic` go to **Accepted**.
+- The rest go to **Rejected**, each labelled with its reason (hover the label for advice).
+- `not-an-image.jpg` is rejected by the server: its name says JPG but its bytes do not.
+- A `.gif` or `.pdf` is rejected in the browser before uploading.
+
+The full QA script is under [Test cases](#test-cases).
+
+### 3. Run the tests
+
+```sh
+pnpm test                # needs `pnpm infra` + `pnpm migrate` first
+pnpm typecheck
+```
+
+`pnpm test` runs 15 tests: every validation rule against real images, the HTTP API end to end through real storage and the worker, and a concurrency test for near-duplicates.
+
+### 4. Where to look
+
+| Path | What it is |
+| --- | --- |
+| `server/src/pipeline.ts` | Validation rules and thresholds (format, size, faces, blur, dHash) |
+| `server/src/worker.ts` | Postgres-backed queue: claim, process, retry, similarity check under lock |
+| `server/src/app.ts` | REST API, session scoping, request validation |
+| `server/src/migrations/001_images.ts` | Schema, enums, constraints, partial indexes |
+| `server/src/s3.ts` | Presigned uploads and signed preview URLs |
+| `web/src/App.tsx` | Upload UI, previews, progress, accepted/rejected panels |
+| `web/src/api.ts` | API client, direct-to-storage upload, rejection copy |
+| `server/test/` | Rule table, integration, and concurrency tests |
+
+### Troubleshooting
+
+- **`Port ... is already in use`**: a previous run is still alive. Run `lsof -i :5180 -i :4000` and stop it.
+- **`role "aragon" does not exist`**: `DATABASE_URL` is pointing at another Postgres. It should use port 5433 from `.env.example`.
+- **Tests fail to connect**: run `pnpm infra` and `pnpm migrate` first, and check `docker compose ps`.
+- **Start over with empty data**: `docker compose down -v`, then `pnpm infra && pnpm migrate`.
+- **First face check is slow**: the face model loads on the worker's first job (about a second); later jobs are fast.
 
 ## API
 
