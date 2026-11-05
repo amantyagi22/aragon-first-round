@@ -1,4 +1,10 @@
-import { DeleteObjectsCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectsCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { MAX_UPLOAD_BYTES } from 'shared';
@@ -20,7 +26,10 @@ export const presignUpload = (Key: string, contentType: string) =>
     Bucket: BUCKET,
     Key,
     Fields: { 'Content-Type': contentType },
-    Conditions: [['content-length-range', 1, MAX_UPLOAD_BYTES], ['eq', '$Content-Type', contentType]],
+    Conditions: [
+      ['content-length-range', 1, MAX_UPLOAD_BYTES],
+      ['eq', '$Content-Type', contentType],
+    ],
     Expires: 600,
   });
 
@@ -28,7 +37,10 @@ export const presignUpload = (Key: string, contentType: string) =>
 export function presignPreview(Key: string) {
   const windowMs = PREVIEW_URL_WINDOW_SECONDS * 1000;
   const signingDate = new Date(Math.floor(Date.now() / windowMs) * windowMs);
-  return getSignedUrl(s3, new GetObjectCommand({ Bucket: BUCKET, Key }), { expiresIn: PREVIEW_URL_WINDOW_SECONDS * 2, signingDate });
+  return getSignedUrl(s3, new GetObjectCommand({ Bucket: BUCKET, Key }), {
+    expiresIn: PREVIEW_URL_WINDOW_SECONDS * 2,
+    signingDate,
+  });
 }
 
 /** Stored size in bytes, or null if the object doesn't exist. */

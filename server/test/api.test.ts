@@ -34,7 +34,10 @@ describe('validation rules', () => {
     ['blurry.jpg', 'blurry'],
   ] as const)('%s -> %s', async (file, reason) => {
     const [image] = await newSession().uploadAndSettle([file]);
-    expect({ status: image.status, reason: image.reason }).toEqual({ status: reason ? 'rejected' : 'accepted', reason });
+    expect({ status: image.status, reason: image.reason }).toEqual({
+      status: reason ? 'rejected' : 'accepted',
+      reason,
+    });
     if (reason) expect(image.reasonDetail).toBeTruthy();
   });
 
@@ -101,7 +104,7 @@ describe('managing the set', () => {
     expect((await again.json()).status).toBe('accepted');
   });
 
-  it("hides images from other sessions", async () => {
+  it('hides images from other sessions', async () => {
     const owner = newSession();
     const [id] = await owner.upload(['ok-headshot.png'], { complete: false });
     const stranger = newSession();
@@ -145,7 +148,10 @@ describe('edge security', () => {
     ['a GIF', [{ filename: 'a.gif', contentType: 'image/gif', size: 10 }]],
     ['a file over the size limit', [{ filename: 'a.jpg', contentType: 'image/jpeg', size: MAX_UPLOAD_BYTES + 1 }]],
     ['an overlong filename', [{ filename: `${'a'.repeat(256)}.jpg`, contentType: 'image/jpeg', size: 10 }]],
-    ['more than 20 files', Array.from({ length: 21 }, () => ({ filename: 'a.jpg', contentType: 'image/jpeg', size: 10 }))],
+    [
+      'more than 20 files',
+      Array.from({ length: 21 }, () => ({ filename: 'a.jpg', contentType: 'image/jpeg', size: 10 })),
+    ],
   ])('rejects reserving %s', async (_, files) => {
     const res = await newSession().call('', { method: 'POST', body: JSON.stringify({ files }) });
     expect(res.status).toBe(400);

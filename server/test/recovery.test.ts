@@ -10,7 +10,9 @@ const SLOW_FIXTURE = 'src/selfie.heic';
 
 let api: Awaited<ReturnType<typeof startApi>>;
 const workers: ChildProcess[] = [];
-beforeAll(async () => { api = await startApi(); });
+beforeAll(async () => {
+  api = await startApi();
+});
 afterAll(async () => {
   api?.close();
   await Promise.all(workers.map(stopWorker));

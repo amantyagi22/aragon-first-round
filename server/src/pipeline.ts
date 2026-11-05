@@ -35,7 +35,8 @@ export async function analyze(original: Buffer): Promise<Analysis> {
   const fail = (r: Rejection, faceCount?: number) => ({ ...r, normalized, faceCount });
 
   const shortest = Math.min(width, height);
-  if (shortest < RULES.minSidePx) return fail(reject('low_resolution', `shortest side ${shortest}px < ${RULES.minSidePx}px`));
+  if (shortest < RULES.minSidePx)
+    return fail(reject('low_resolution', `shortest side ${shortest}px < ${RULES.minSidePx}px`));
 
   const faces = await detectFaces(jpeg, width, height);
   if (faces.length === 0) return fail(reject('no_face', 'no face detected'), 0);
@@ -47,7 +48,8 @@ export async function analyze(original: Buffer): Promise<Analysis> {
     return fail(reject('face_too_small', `face covers ${pct(areaRatio)} < ${pct(RULES.minFaceAreaRatio)}`), 1);
   }
   const score = await sharpness(jpeg, face);
-  if (score < RULES.minSharpness) return fail(reject('blurry', `face sharpness ${score.toFixed(1)} < ${RULES.minSharpness}`), 1);
+  if (score < RULES.minSharpness)
+    return fail(reject('blurry', `face sharpness ${score.toFixed(1)} < ${RULES.minSharpness}`), 1);
 
   return { ok: true, ...normalized, faceCount: 1, dhash: await dHash(jpeg) };
 }
@@ -56,8 +58,12 @@ const pct = (r: number) => `${(r * 100).toFixed(1)}%`;
 
 /** HEIC via a dedicated decoder (prebuilt sharp has no HEVC). rotate() applies EXIF orientation; sharp drops all metadata on output. */
 async function normalize(original: Buffer, format: ImageFormat): Promise<Normalized> {
-  const decodable = format === 'heic' ? Buffer.from(await heicConvert({ buffer: original, format: 'JPEG', quality: 0.92 })) : original;
-  const { data, info } = await sharp(decodable, { failOn: 'error' }).rotate().jpeg({ quality: 90 }).toBuffer({ resolveWithObject: true });
+  const decodable =
+    format === 'heic' ? Buffer.from(await heicConvert({ buffer: original, format: 'JPEG', quality: 0.92 })) : original;
+  const { data, info } = await sharp(decodable, { failOn: 'error' })
+    .rotate()
+    .jpeg({ quality: 90 })
+    .toBuffer({ resolveWithObject: true });
   return { jpeg: data, width: info.width, height: info.height, format };
 }
 
@@ -79,7 +85,9 @@ export function loadFaceModel(): Promise<FaceApi> {
     const tf = api.tf as unknown as { setBackend(name: string): Promise<boolean>; ready(): Promise<void> };
     await tf.setBackend('wasm');
     await tf.ready();
-    await api.nets.ssdMobilenetv1.loadFromDisk(path.join(path.dirname(require.resolve('@vladmandic/face-api/package.json')), 'model'));
+    await api.nets.ssdMobilenetv1.loadFromDisk(
+      path.join(path.dirname(require.resolve('@vladmandic/face-api/package.json')), 'model'),
+    );
     return api;
   })();
   return faceApi;
@@ -94,9 +102,18 @@ async function detectFaces(jpeg: Buffer, width: number, height: number): Promise
     .toBuffer({ resolveWithObject: true });
   const tensor = api.tf.tensor3d(new Uint8Array(data), [info.height, info.width, 3]);
   try {
-    const detections = await api.detectAllFaces(tensor as never, new api.SsdMobilenetv1Options({ minConfidence: RULES.minFaceConfidence }));
+    const detections = await api.detectAllFaces(
+      tensor as never,
+      new api.SsdMobilenetv1Options({ minConfidence: RULES.minFaceConfidence }),
+    );
     const scale = width / info.width;
-    return detections.map(({ box }) => clampBox({ x: box.x * scale, y: box.y * scale, width: box.width * scale, height: box.height * scale }, width, height));
+    return detections.map(({ box }) =>
+      clampBox(
+        { x: box.x * scale, y: box.y * scale, width: box.width * scale, height: box.height * scale },
+        width,
+        height,
+      ),
+    );
   } finally {
     tensor.dispose();
   }
@@ -105,7 +122,12 @@ async function detectFaces(jpeg: Buffer, width: number, height: number): Promise
 function clampBox(b: Box, w: number, h: number): Box {
   const x = Math.min(w - 1, Math.max(0, Math.floor(b.x)));
   const y = Math.min(h - 1, Math.max(0, Math.floor(b.y)));
-  return { x, y, width: Math.max(1, Math.min(w - x, Math.floor(b.width))), height: Math.max(1, Math.min(h - y, Math.floor(b.height))) };
+  return {
+    x,
+    y,
+    width: Math.max(1, Math.min(w - x, Math.floor(b.width))),
+    height: Math.max(1, Math.min(h - y, Math.floor(b.height))),
+  };
 }
 
 // ---- blur: variance of the Laplacian on the face crop, so portrait-mode backgrounds don't count ----
@@ -118,7 +140,9 @@ async function sharpness(jpeg: Buffer, face: Box): Promise<number> {
     .raw()
     .toBuffer({ resolveWithObject: true });
   const w = info.width;
-  let sum = 0, sumSq = 0, n = 0;
+  let sum = 0,
+    sumSq = 0,
+    n = 0;
   for (let y = 1; y < info.height - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
       const i = y * w + x;

@@ -8,7 +8,10 @@ const sessionId = localStorage.getItem('sessionId') ?? crypto.randomUUID();
 localStorage.setItem('sessionId', sessionId);
 
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API}/api/images${path}`, { ...init, headers: { 'content-type': 'application/json', 'x-session-id': sessionId } });
+  const res = await fetch(`${API}/api/images${path}`, {
+    ...init,
+    headers: { 'content-type': 'application/json', 'x-session-id': sessionId },
+  });
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
   return res.status === 204 ? (undefined as T) : res.json();
 }
@@ -24,7 +27,9 @@ export async function reserveUploads(files: File[]): Promise<Reservation[]> {
     const batch = files.slice(i, i + MAX_FILES_PER_BATCH);
     const { images } = await call<{ images: Reservation[] }>('', {
       method: 'POST',
-      body: JSON.stringify({ files: batch.map((f) => ({ filename: f.name, contentType: contentTypeOf(f), size: f.size })) }),
+      body: JSON.stringify({
+        files: batch.map((f) => ({ filename: f.name, contentType: contentTypeOf(f), size: f.size })),
+      }),
     });
     out.push(...images);
   }
@@ -47,7 +52,13 @@ export function uploadToStorage(r: Reservation, file: File, onProgress: (pct: nu
 }
 
 const MIME_BY_FORMAT = { jpeg: 'image/jpeg', png: 'image/png', heic: 'image/heic' } as const;
-const MIME_BY_EXT: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', heic: 'image/heic', heif: 'image/heif' };
+const MIME_BY_EXT: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  heic: 'image/heic',
+  heif: 'image/heif',
+};
 
 /** Browsers often report HEIC with an empty MIME type, so fall back to the extension. */
 function contentTypeOf(f: File): string {

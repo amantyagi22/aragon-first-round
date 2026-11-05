@@ -51,7 +51,12 @@ async function processImage(job: ImageRow) {
 
     let written: number;
     if (!result.ok) {
-      written = await update(db, { ...common, status: 'rejected', reason: result.reason, reason_detail: result.detail });
+      written = await update(db, {
+        ...common,
+        status: 'rejected',
+        reason: result.reason,
+        reason_detail: result.detail,
+      });
     } else {
       // Serialize the similarity check per session, so two near-duplicates processed at once can't both be accepted.
       written = await db.transaction<number>(async (trx) => {
@@ -69,12 +74,15 @@ async function processImage(job: ImageRow) {
           dhash: result.dhash.toString(),
           status: duplicate ? 'rejected' : 'accepted',
           reason: duplicate ? 'too_similar' : null,
-          reason_detail: duplicate ? `distance ${nearest.distance} <= ${RULES.maxSimilarDistance} to image ${nearest.id}` : null,
+          reason_detail: duplicate
+            ? `distance ${nearest.distance} <= ${RULES.maxSimilarDistance} to image ${nearest.id}`
+            : null,
         });
       });
     }
     // Deleted while we were processing: don't leave the processed copy behind.
-    if (!written && processedKey && !(await db('images').where({ id: job.id }).first())) await deleteObjects([processedKey]);
+    if (!written && processedKey && !(await db('images').where({ id: job.id }).first()))
+      await deleteObjects([processedKey]);
   } catch (err) {
     console.error(`image ${job.id} attempt ${job.attempts} failed:`, err);
     await update(db, {

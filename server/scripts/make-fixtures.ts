@@ -15,42 +15,67 @@ await save('ok-second-selfie.jpg', await src('glasses.jpg').resize(1200).jpeg({ 
 await save('ok-headshot.png', await src('headshot.png').png().toBuffer());
 
 // Near-duplicate: re-encoded, slightly cropped, slightly brighter.
-await save('near-duplicate.jpg', await sharp(selfie)
-  .extract({ left: 30, top: 40, width: width - 60, height: height - 80 })
-  .modulate({ brightness: 1.04 })
-  .jpeg({ quality: 78 })
-  .toBuffer());
+await save(
+  'near-duplicate.jpg',
+  await sharp(selfie)
+    .extract({ left: 30, top: 40, width: width - 60, height: height - 80 })
+    .modulate({ brightness: 1.04 })
+    .jpeg({ quality: 78 })
+    .toBuffer(),
+);
 
 await save('blurry.jpg', await sharp(selfie).blur(12).jpeg({ quality: 95 }).toBuffer());
 
 // Portrait mode: background heavily blurred, face region left sharp.
-const faceRegion = { left: Math.round(width * 0.2), top: Math.round(height * 0.12), width: Math.round(width * 0.6), height: Math.round(height * 0.5) };
-await save('portrait-mode.jpg', await sharp(await sharp(selfie).blur(20).toBuffer())
-  .composite([{ input: await sharp(selfie).extract(faceRegion).toBuffer(), left: faceRegion.left, top: faceRegion.top }])
-  .jpeg({ quality: 92 })
-  .toBuffer());
+const faceRegion = {
+  left: Math.round(width * 0.2),
+  top: Math.round(height * 0.12),
+  width: Math.round(width * 0.6),
+  height: Math.round(height * 0.5),
+};
+await save(
+  'portrait-mode.jpg',
+  await sharp(await sharp(selfie).blur(20).toBuffer())
+    .composite([
+      { input: await sharp(selfie).extract(faceRegion).toBuffer(), left: faceRegion.left, top: faceRegion.top },
+    ])
+    .jpeg({ quality: 92 })
+    .toBuffer(),
+);
 
 // Sideways: pixels stored rotated, with EXIF orientation 6 saying "rotate 90° clockwise to display".
-await save('sideways-exif.jpg', await sharp(selfie).rotate(-90).withMetadata({ orientation: 6 }).jpeg({ quality: 92 }).toBuffer());
+await save(
+  'sideways-exif.jpg',
+  await sharp(selfie).rotate(-90).withMetadata({ orientation: 6 }).jpeg({ quality: 92 }).toBuffer(),
+);
 
-await save('low-resolution.jpg', await src('glasses.jpg').resize(400).jpeg({ quality: 100, chromaSubsampling: '4:4:4' }).toBuffer());
+await save(
+  'low-resolution.jpg',
+  await src('glasses.jpg').resize(400).jpeg({ quality: 100, chromaSubsampling: '4:4:4' }).toBuffer(),
+);
 await save('tiny-thumbnail.jpg', await src('glasses.jpg').resize(160).jpeg({ quality: 80 }).toBuffer());
 await save('no-face-landscape.jpg', await src('desk.jpg').jpeg({ quality: 90 }).toBuffer());
 
 // Far-away shot: a small person on a large canvas.
-await save('face-too-small.jpg', await sharp({ create: { width: 2400, height: 1800, channels: 3, background: '#d8d4cc' } })
-  .composite([{ input: await sharp(selfie).resize(220).toBuffer(), left: 1100, top: 700 }])
-  .jpeg({ quality: 92 })
-  .toBuffer());
+await save(
+  'face-too-small.jpg',
+  await sharp({ create: { width: 2400, height: 1800, channels: 3, background: '#d8d4cc' } })
+    .composite([{ input: await sharp(selfie).resize(220).toBuffer(), left: 1100, top: 700 }])
+    .jpeg({ quality: 92 })
+    .toBuffer(),
+);
 
 // Group photo: two people side by side.
-await save('group.jpg', await sharp({ create: { width: 1600, height: 1200, channels: 3, background: '#fff' } })
-  .composite([
-    { input: await sharp(selfie).resize(800, 1200, { fit: 'cover' }).toBuffer(), left: 0, top: 0 },
-    { input: await src('headshot.png').resize(800, 1200, { fit: 'cover' }).toBuffer(), left: 800, top: 0 },
-  ])
-  .jpeg({ quality: 90 })
-  .toBuffer());
+await save(
+  'group.jpg',
+  await sharp({ create: { width: 1600, height: 1200, channels: 3, background: '#fff' } })
+    .composite([
+      { input: await sharp(selfie).resize(800, 1200, { fit: 'cover' }).toBuffer(), left: 0, top: 0 },
+      { input: await src('headshot.png').resize(800, 1200, { fit: 'cover' }).toBuffer(), left: 800, top: 0 },
+    ])
+    .jpeg({ quality: 90 })
+    .toBuffer(),
+);
 
 // Valid JPEG header, then garbage: passes the format and size gates, fails decoding.
 const header = selfie.subarray(0, 600);

@@ -8,12 +8,26 @@ try {
 } catch {
   await s3.send(new CreateBucketCommand({ Bucket: BUCKET }));
 }
-await s3.send(new PutBucketCorsCommand({
-  Bucket: BUCKET,
-  CORSConfiguration: { CORSRules: [{ AllowedOrigins: [process.env.WEB_ORIGIN!], AllowedMethods: ['GET', 'POST'], AllowedHeaders: ['*'], MaxAgeSeconds: 3600 }] },
-}));
+await s3.send(
+  new PutBucketCorsCommand({
+    Bucket: BUCKET,
+    CORSConfiguration: {
+      CORSRules: [
+        {
+          AllowedOrigins: [process.env.WEB_ORIGIN!],
+          AllowedMethods: ['GET', 'POST'],
+          AllowedHeaders: ['*'],
+          MaxAgeSeconds: 3600,
+        },
+      ],
+    },
+  }),
+);
 console.log(`bucket "${BUCKET}" ready, CORS allows ${process.env.WEB_ORIGIN}`);
 
-const [, applied] = await db.migrate.latest({ directory: new URL('./migrations', import.meta.url).pathname, loadExtensions: ['.ts'] });
+const [, applied] = await db.migrate.latest({
+  directory: new URL('./migrations', import.meta.url).pathname,
+  loadExtensions: ['.ts'],
+});
 console.log(applied.length ? `migrated: ${applied.join(', ')}` : 'database up to date');
 await db.destroy();

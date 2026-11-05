@@ -63,11 +63,22 @@ export function createApp() {
     await db('sessions').insert({ id: sessionId }).onConflict('id').ignore();
     const rows = files.map((f) => {
       const id = randomUUID();
-      return { id, session_id: sessionId, filename: f.filename, declared_mime: f.contentType, size_bytes: f.size, original_key: keys.original(id) };
+      return {
+        id,
+        session_id: sessionId,
+        filename: f.filename,
+        declared_mime: f.contentType,
+        size_bytes: f.size,
+        original_key: keys.original(id),
+      };
     });
     await db('images').insert(rows);
     const out = await Promise.all(
-      rows.map(async (r) => ({ id: r.id, filename: r.filename, upload: await presignUpload(r.original_key, r.declared_mime) })),
+      rows.map(async (r) => ({
+        id: r.id,
+        filename: r.filename,
+        upload: await presignUpload(r.original_key, r.declared_mime),
+      })),
     );
     res.status(201).json({ images: out });
   });
@@ -92,7 +103,10 @@ export function createApp() {
 
   images.get('/', async (_req, res) => {
     // ponytail: no pagination, sessions hold tens of images; keyset pagination on (created_at, id) if that changes.
-    const rows = await db<ImageRow>('images').where({ session_id: res.locals.sessionId }).orderBy('created_at', 'desc').limit(500);
+    const rows = await db<ImageRow>('images')
+      .where({ session_id: res.locals.sessionId })
+      .orderBy('created_at', 'desc')
+      .limit(500);
     res.json({ images: await Promise.all(rows.map(toDto)) });
   });
 

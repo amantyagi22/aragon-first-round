@@ -38,7 +38,9 @@ export function waitForOutput(child: ChildProcess, text: string) {
 }
 
 export const stopWorker = (w: ChildProcess) =>
-  new Promise<void>((r) => (w.exitCode !== null || w.signalCode !== null ? r() : (w.once('exit', () => r()), w.kill('SIGKILL'))));
+  new Promise<void>((r) =>
+    w.exitCode !== null || w.signalCode !== null ? r() : (w.once('exit', () => r()), w.kill('SIGKILL')),
+  );
 
 const fixture = (name: string) => readFile(new URL(`./fixtures/${name}`, import.meta.url));
 const MIME: Record<string, string> = { jpg: 'image/jpeg', png: 'image/png', heic: 'image/heic', gif: 'image/gif' };
@@ -56,7 +58,10 @@ export function postToStorage(r: Reservation, body: Buffer) {
 /** A browser session: talks to the API exactly the way the web app does. */
 export function session(base: string, id = randomUUID()) {
   const call = (path: string, init: RequestInit = {}) =>
-    fetch(base + path, { ...init, headers: { 'content-type': 'application/json', 'x-session-id': id, ...init.headers } });
+    fetch(base + path, {
+      ...init,
+      headers: { 'content-type': 'application/json', 'x-session-id': id, ...init.headers },
+    });
   const json = async <T>(res: Response | Promise<Response>) => (await res).json() as Promise<T>;
 
   async function reserve(files: Array<{ filename: string; contentType: string; size: number }>) {
@@ -68,11 +73,15 @@ export function session(base: string, id = randomUUID()) {
   /** Reserve, upload straight to storage, then (unless told not to) mark complete. */
   async function upload(names: string[], { complete = true } = {}) {
     const bodies = await Promise.all(names.map(fixture));
-    const reservations = await reserve(names.map((n, i) => ({ filename: n, contentType: mimeOf(n), size: bodies[i].length })));
-    await Promise.all(reservations.map(async (r, i) => {
-      const res = await postToStorage(r, bodies[i]);
-      if (!res.ok) throw new Error(`storage refused ${names[i]}: ${res.status}`);
-    }));
+    const reservations = await reserve(
+      names.map((n, i) => ({ filename: n, contentType: mimeOf(n), size: bodies[i].length })),
+    );
+    await Promise.all(
+      reservations.map(async (r, i) => {
+        const res = await postToStorage(r, bodies[i]);
+        if (!res.ok) throw new Error(`storage refused ${names[i]}: ${res.status}`);
+      }),
+    );
     const ids = reservations.map((r) => r.id);
     if (complete) await Promise.all(ids.map((i) => completeUpload(i)));
     return ids;
@@ -88,7 +97,8 @@ export function session(base: string, id = randomUUID()) {
     for (;;) {
       const all = await Promise.all(ids.map(get));
       if (all.every((i) => SETTLED_STATUSES.includes(i.status))) return all;
-      if (Date.now() > deadline) throw new Error(`not settled: ${all.map((i) => `${i.filename}=${i.status}`).join(', ')}`);
+      if (Date.now() > deadline)
+        throw new Error(`not settled: ${all.map((i) => `${i.filename}=${i.status}`).join(', ')}`);
       await new Promise((r) => setTimeout(r, 100));
     }
   }

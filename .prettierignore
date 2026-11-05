@@ -1,0 +1,5 @@
+pnpm-lock.yaml
+**/dist
+brag-output
+server/test/fixtures
+PROBLEM.md
