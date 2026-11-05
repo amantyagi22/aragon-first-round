@@ -3,7 +3,7 @@
 Upload photos, validate them asynchronously, and sort them into Accepted and Rejected.
 Built for the Aragon.ai round 1 challenge ([PROBLEM.md](PROBLEM.md)).
 
-[![Demo: selfies get stamped Accepted or Rejected, then a file runs through the 8 validation checks](brag-output/brag.gif)](brag-output/brag.mp4)
+[![Demo: selfies get stamped Accepted or Rejected, then a corrupt file fails at decode while a good selfie passes all 8 server checks](brag-output/brag.gif)](brag-output/brag.mp4)
 
 Click the animation to watch the full 20-second demo video with sound.
 
@@ -42,7 +42,7 @@ Drag them all into the upload box at once:
 
 - `ok-selfie.jpg`, `ok-second-selfie.jpg`, `ok-headshot.png`, `portrait-mode.jpg`, `sideways-exif.jpg`, `src/selfie.heic` go to **Accepted**.
 - `near-duplicate.jpg` is a re-encoded crop of `ok-selfie.jpg`, so whichever of the two is processed second is rejected as too similar.
-- The rest go to **Rejected**, each labelled with its reason (hover the label for advice).
+- The rest go to **Rejected**, each labelled with its reason and a hint on how to fix it.
 - `pdf-renamed.jpg` is a PDF named `.jpg`: rejected because its bytes are not an image.
 - `animation.gif` is rejected in the browser before uploading.
 
@@ -184,7 +184,7 @@ Manual QA in the browser:
 1. Drop a `.gif` or `.pdf`: rejected instantly on the client, never uploaded.
 2. Drop a file over 120 MB: rejected instantly on the client.
 3. Drop a mixed batch of the fixtures: blurred previews with upload progress, then each tile moves into Accepted or Rejected.
-4. Hover a rejection reason: a tooltip explains how to fix it.
+4. Look at a rejected card: its reason and a fix hint are shown under the photo.
 5. Upload the same photo twice: the second is rejected as too similar.
 6. Delete an image: it disappears and the accepted counter updates.
 7. Reload the page: the gallery is restored from the server for the same session.

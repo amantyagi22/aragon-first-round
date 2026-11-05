@@ -1,2 +1,2 @@
-Drop 10 selfies in, 3 make it, and the other 7 get told exactly why: multiple faces, blurry, too far away, or "too similar to another upload".
-8 checks run cheapest-first in a background worker, so not-an-image.jpg gets caught at step 1 because its name says JPG and its bytes don't.
+Drop 10 selfies in: a PDF named .jpg is caught before it uploads, 4 photos are accepted, and the other 5 each get a reason and a fix, like "Too similar to another upload" and "Unreadable file".
+On the server, 8 checks run cheapest first in a background worker, so corrupt.jpg passes the magic-byte check and fails at decode, before any face detection runs.

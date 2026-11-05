@@ -1,7 +1,6 @@
 *.mp4
 node_modules/
 .env
+dist/
 brag-output/work/
 !brag-output/brag.mp4
-dist/
-brag-output/
