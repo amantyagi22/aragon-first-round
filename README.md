@@ -56,6 +56,7 @@ pnpm typecheck
 pnpm lint                # ESLint + Prettier check
 ```
 
+Tests use their own `aragon_test` database and `images-test` bucket (created automatically), so they can run while `pnpm dev` is up.
 `pnpm test` runs 32 tests, all through the public HTTP API with a real worker process: every validation rule, HEIC and EXIF handling, similarity (including a concurrency race), delete, idempotency, session isolation, storage-enforced limits, and real worker crashes (SIGKILL mid-job).
 
 ### 4. Where to look
