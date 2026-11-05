@@ -43,6 +43,8 @@ type Entry = {
   progress: number;
   serverId?: string;
   error?: Copy;
+  /** Hidden from the uploads list by "Clear"; kept so its card still has a local preview. */
+  cleared?: boolean;
 };
 type Action =
   { type: 'add'; entries: Entry[] } | { type: 'patch'; key: string; patch: Partial<Entry> } | { type: 'clearFinished' };
@@ -54,8 +56,11 @@ function uploadsReducer(state: Entry[], action: Action): Entry[] {
     case 'patch':
       return state.map((e) => (e.key === action.key ? { ...e, ...action.patch } : e));
     case 'clearFinished':
-      state.filter((e) => e.phase === 'done' || e.phase === 'error').forEach((e) => URL.revokeObjectURL(e.preview));
-      return state.filter((e) => e.phase !== 'done' && e.phase !== 'error');
+      // Entries with a server image keep their preview: the card may have no server preview (e.g. file too small).
+      state.filter((e) => e.phase === 'error' && !e.serverId).forEach((e) => URL.revokeObjectURL(e.preview));
+      return state
+        .filter((e) => !(e.phase === 'error' && !e.serverId))
+        .map((e) => (e.phase === 'done' || e.phase === 'error' ? { ...e, cleared: true } : e));
   }
 }
 
@@ -180,6 +185,7 @@ export function App() {
   }
   // ponytail: preview object URLs are revoked on "Clear"; the browser frees the rest on page unload.
 
+  const visibleUploads = uploads.filter((e) => !e.cleared);
   const previewFor = (id: string) => uploads.find((e) => e.serverId === id)?.preview;
   const accepted = images.filter((i) => i.status === 'accepted');
   const needsAttention = images.filter((i) => i.status === 'rejected' || i.status === 'failed');
@@ -236,7 +242,7 @@ export function App() {
             <span className="text-xs text-zinc-500">PNG, JPG, HEIC up to {MAX_MB} MB</span>
           </label>
 
-          {uploads.length > 0 && (
+          {visibleUploads.length > 0 && (
             <section aria-label="Uploads" className="mt-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">Uploads</h2>
@@ -251,7 +257,7 @@ export function App() {
                 )}
               </div>
               <ul className="mt-2 max-h-72 space-y-2 overflow-y-auto pr-1">
-                {uploads.map((e) => (
+                {visibleUploads.map((e) => (
                   <UploadRow key={e.key} entry={e} />
                 ))}
               </ul>
@@ -292,6 +298,15 @@ export function App() {
                 title="Needs attention"
                 count={needsAttention.length}
                 subtitle="Replacing these is optional once you have enough good photos."
+                action={
+                  <button
+                    type="button"
+                    onClick={() => needsAttention.forEach((i) => remove.mutate(i.id))}
+                    className="text-xs font-normal text-zinc-500 hover:text-zinc-900 active:scale-[0.97]"
+                  >
+                    Remove all
+                  </button>
+                }
                 icon={<WarningCircle size={18} weight="fill" className="text-rose-500" />}
               >
                 {needsAttention.map((i) => (
@@ -409,6 +424,7 @@ function Panel({
   count,
   subtitle,
   icon,
+  action,
   children,
 }: {
   tone: keyof typeof TONES;
@@ -416,6 +432,7 @@ function Panel({
   count?: number;
   subtitle?: string;
   icon?: React.ReactNode;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -424,6 +441,7 @@ function Panel({
         {icon}
         {title}
         {count !== undefined && <span className="font-mono text-sm font-normal text-zinc-500">{count}</span>}
+        {action && <span className="ml-auto">{action}</span>}
       </h3>
       {subtitle && <p className="mt-1 text-sm text-zinc-600">{subtitle}</p>}
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
