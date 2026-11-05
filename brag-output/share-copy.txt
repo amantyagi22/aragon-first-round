@@ -1,0 +1,2 @@
+Drop 10 selfies in, 3 make it, and the other 7 get told exactly why: multiple faces, blurry, too far away, or "too similar to another upload".
+8 checks run cheapest-first in a background worker, so not-an-image.jpg gets caught at step 1 because its name says JPG and its bytes don't.
