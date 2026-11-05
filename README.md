@@ -76,9 +76,10 @@ sequenceDiagram
 ## Security
 
 - Content type is decided by magic bytes on the server, not by extension or client MIME.
-- Upload size is capped by the presigned POST policy (25 MB), so oversized files never reach storage.
+- Upload size is capped at 25 MB by the presigned POST policy (`content-length-range`) and checked again on the client.
+  AWS S3 enforces the policy; enforcement by the local SeaweedFS has not been verified.
 - The bucket is private; previews are short-lived signed GET URLs.
-- Re-encoding through `sharp` strips EXIF (including GPS) and neutralises malformed image payloads.
+- Images are decoded and re-encoded with `sharp`, which strips EXIF (including GPS); only the re-encoded JPEG is ever served back.
 - Requests are validated with zod; `helmet`, CORS allowlist, rate limiting, and a 32 KB JSON body limit.
 
 ## Test cases
