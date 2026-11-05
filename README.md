@@ -3,9 +3,9 @@
 Upload photos, validate them asynchronously, and sort them into Accepted and Rejected.
 Built for the Aragon.ai round 1 challenge ([PROBLEM.md](PROBLEM.md)).
 
-[![20-second demo: photos are uploaded, checked, and sorted into Accepted and Rejected with a reason for each](brag-output/brag.jpg)](brag-output/brag.mp4)
+[![Demo: selfies get stamped Accepted or Rejected, then a file runs through the 8 validation checks](brag-output/brag.gif)](brag-output/brag.mp4)
 
-Click the image to watch the 20-second demo video.
+Click the animation to watch the full 20-second demo video with sound.
 
 **Stack:** React + Vite + Tailwind + TanStack Query, Express + Knex, Postgres 16, S3-compatible storage, `sharp` + `heic-convert`, `@vladmandic/face-api` (TF.js WASM).
 
