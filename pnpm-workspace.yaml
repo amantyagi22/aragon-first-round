@@ -1,7 +1,7 @@
 packages:
   - server
   - web
+  - shared
 onlyBuiltDependencies:
   - sharp
   - esbuild
-  - "@tensorflow/tfjs-node"

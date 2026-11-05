@@ -2,21 +2,22 @@ import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 import { CheckCircle, CircleNotch, Trash, UploadSimple, WarningCircle } from '@phosphor-icons/react';
-import { REASON_COPY, completeUpload, contentTypeOf, deleteImage, listImages, reserveUploads, uploadToStorage, type Image } from './api';
+import { MAX_UPLOAD_BYTES, SETTLED_STATUSES, type ImageDto as Image } from 'shared';
+import { REASON_COPY, completeUpload, deleteImage, isSupportedImage, listImages, reserveUploads, uploadToStorage } from './api';
 
 const TARGET = 10;
-const MAX_BYTES = 25 * 1024 * 1024;
-const SETTLED = ['accepted', 'rejected', 'failed'];
+const MAX_MB = MAX_UPLOAD_BYTES / 1024 / 1024;
+const isSettled = (i: Image) => SETTLED_STATUSES.includes(i.status);
 
 /** Client-side state for in-flight uploads: local preview + progress, keyed by server id. */
-type Local = { preview: string; progress: number };
-/** Files rejected before upload (wrong type / too big): never hit the server. */
-type ClientReject = { key: string; filename: string; preview: string | null; message: string };
+type UploadProgress = { preview: string; progress: number };
+/** Files rejected in the browser (wrong type / too big): they never reach the server. */
+type ClientReject = { key: string; filename: string; label: string; hint: string };
 
 export function App() {
   const qc = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
-  const [local, setLocal] = useState<Record<string, Local>>({});
+  const [local, setLocal] = useState<Record<string, UploadProgress>>({});
   const [clientRejects, setClientRejects] = useState<ClientReject[]>([]);
   const [dragging, setDragging] = useState(false);
 
@@ -24,7 +25,7 @@ export function App() {
     queryKey: ['images'],
     queryFn: listImages,
     // Poll only while something is still being processed.
-    refetchInterval: (q) => (q.state.data?.some((i) => !SETTLED.includes(i.status)) ? 1000 : false),
+    refetchInterval: (q) => (q.state.data?.some((i) => !isSettled(i)) ? 1000 : false),
   });
 
   const upload = useMutation({
@@ -46,21 +47,20 @@ export function App() {
     onSettled: () => qc.invalidateQueries({ queryKey: ['images'] }),
   });
 
-  function onFiles(list: FileList | null) {
+  async function onFiles(list: FileList | null) {
     const files = [...(list ?? [])];
-    const rejects: ClientReject[] = [];
-    const ok = files.filter((f) => {
-      const message = !contentTypeOf(f) ? 'Only JPG, PNG and HEIC photos are supported.' : f.size > MAX_BYTES ? 'Photos must be under 25 MB.' : null;
-      if (message) rejects.push({ key: crypto.randomUUID(), filename: f.name, preview: f.type.startsWith('image/') ? URL.createObjectURL(f) : null, message });
-      return !message;
-    });
-    setClientRejects((r) => [...r, ...rejects]);
+    const verdicts = await Promise.all(files.map(async (f) =>
+      !(await isSupportedImage(f)) ? REASON_COPY.unsupported_format
+        : f.size > MAX_UPLOAD_BYTES ? { label: 'File too large', hint: `Photos must be under ${MAX_MB} MB.` }
+          : null));
+    setClientRejects((r) => [...r, ...files.flatMap((f, i) => verdicts[i] ? [{ key: crypto.randomUUID(), filename: f.name, ...verdicts[i] }] : [])]);
+    const ok = files.filter((_, i) => !verdicts[i]);
     if (ok.length) upload.mutate(ok);
   }
 
   const accepted = images.filter((i) => i.status === 'accepted');
   const rejected = images.filter((i) => i.status === 'rejected' || i.status === 'failed');
-  const pending = images.filter((i) => !SETTLED.includes(i.status));
+  const pending = images.filter((i) => !isSettled(i));
   const busy = pending.length > 0 || upload.isPending;
 
   return (
@@ -88,11 +88,11 @@ export function App() {
               {busy ? 'Uploading…' : 'Choose photos'}
             </span>
             <span className="text-sm font-medium">Click to upload or drag and drop</span>
-            <span className="text-xs text-zinc-500">PNG, JPG, HEIC up to 25 MB</span>
+            <span className="text-xs text-zinc-500">PNG, JPG, HEIC up to {MAX_MB} MB</span>
           </button>
           <input ref={input} type="file" multiple hidden accept=".jpg,.jpeg,.png,.heic,.heif,image/jpeg,image/png,image/heic,image/heif"
             onChange={(e) => { onFiles(e.target.files); e.target.value = ''; }} />
-          {upload.isError && <p role="alert" className="mt-3 text-sm text-red-600">Upload failed. Please try again.</p>}
+          {upload.isError && <p role="alert" className="mt-3 text-sm text-rose-600">Upload failed. Please try again.</p>}
         </aside>
 
         <section>
@@ -116,15 +116,14 @@ export function App() {
               </Panel>
             )}
             {(rejected.length > 0 || clientRejects.length > 0) && (
-              <Panel tone="bad" title="Some photos didn't meet our guidelines" subtitle="Replacing these is optional once you have enough good photos." icon={<WarningCircle size={18} weight="fill" className="text-red-500" />}>
+              <Panel tone="bad" title="Some photos didn't meet our guidelines" subtitle="Replacing these is optional once you have enough good photos." icon={<WarningCircle size={18} weight="fill" className="text-rose-500" />}>
                 {rejected.map((i) => {
-                  const [label, help] = REASON_COPY[i.status === 'failed' ? 'failed' : i.reason!];
-                  return <Tile key={i.id} image={i} local={local[i.id]} label={label} help={help} onDelete={() => remove.mutate(i.id)} />;
+                  const copy = REASON_COPY[i.status === 'failed' ? 'failed' : i.reason!];
+                  return <Tile key={i.id} image={i} local={local[i.id]} copy={copy} onDelete={() => remove.mutate(i.id)} />;
                 })}
                 {clientRejects.map((r) => (
-                  <Tile key={r.key} image={{ id: r.key, filename: r.filename, status: 'rejected', reason: 'invalid_format', url: r.preview }}
-                    label={r.message.startsWith('Only') ? 'Unsupported format' : 'File too large'} help={r.message}
-                    onDelete={() => setClientRejects((xs) => xs.filter((x) => x.key !== r.key))} />
+                  <Tile key={r.key} image={{ id: r.key, filename: r.filename, status: 'rejected', reason: null, reasonDetail: null, width: null, height: null, createdAt: '', url: null }}
+                    copy={r} onDelete={() => setClientRejects((xs) => xs.filter((x) => x.key !== r.key))} />
                 ))}
               </Panel>
             )}
@@ -138,7 +137,7 @@ export function App() {
   );
 }
 
-const TONES = { neutral: 'bg-white border-zinc-200', good: 'bg-emerald-50/60 border-emerald-100', bad: 'bg-red-50/50 border-red-100' };
+const TONES = { neutral: 'bg-white border-zinc-200', good: 'bg-emerald-50/60 border-emerald-100', bad: 'bg-rose-50/50 border-rose-100' };
 
 function Panel({ tone, title, subtitle, icon, children }: { tone: keyof typeof TONES; title: string; subtitle?: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -152,15 +151,15 @@ function Panel({ tone, title, subtitle, icon, children }: { tone: keyof typeof T
   );
 }
 
-function Tile({ image, local, label, help, onDelete }: { image: Image; local?: Local; label?: string; help?: string; onDelete: () => void }) {
-  const settled = SETTLED.includes(image.status);
+function Tile({ image, local, copy, onDelete }: { image: Image; local?: UploadProgress; copy?: { label: string; hint: string }; onDelete: () => void }) {
+  const settled = isSettled(image);
   // Prefer the server's processed JPEG (HEIC can't render in most browsers); fall back to the local preview.
   const src = image.url ?? local?.preview;
   const uploading = image.status === 'pending_upload' && local && local.progress < 1;
   return (
     <motion.figure layout layoutId={image.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="group">
       <div className="relative aspect-[3/4] overflow-hidden rounded-xl bg-zinc-200">
-        {src && <img src={src} alt={image.filename} className={`size-full object-cover transition-[filter] duration-500 ${settled ? '' : 'blur-md scale-105'}`} />}
+        {src ? <img src={src} alt={image.filename} className={`size-full object-cover transition-[filter] duration-500 ${settled ? '' : 'blur-md scale-105'}`} /> : <div className="grid size-full place-items-center px-3 text-center font-mono text-xs break-all text-zinc-500">{image.filename}</div>}
         {!settled && (
           <div className="absolute inset-0 grid place-items-center">
             <span className="flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 text-xs font-medium text-zinc-700 shadow-sm">
@@ -170,16 +169,14 @@ function Tile({ image, local, label, help, onDelete }: { image: Image; local?: L
           </div>
         )}
         <button type="button" onClick={onDelete} aria-label={`Delete ${image.filename}`}
-          className="absolute right-2 top-2 grid size-8 place-items-center rounded-full bg-white/90 text-zinc-700 shadow-sm transition hover:bg-white hover:text-red-600 focus-visible:outline-2 focus-visible:outline-accent">
+          className="absolute right-2 top-2 grid size-8 place-items-center rounded-full bg-white/90 text-zinc-700 shadow-sm transition hover:bg-white hover:text-rose-600 focus-visible:outline-2 focus-visible:outline-accent">
           <Trash size={16} />
         </button>
       </div>
-      {label && (
-        <figcaption className="relative mt-2 text-center">
-          <span tabIndex={0} className="peer cursor-help text-sm text-zinc-700 underline decoration-zinc-400 underline-offset-4">{label}</span>
-          <span role="tooltip" className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-56 -translate-x-1/2 rounded-lg bg-zinc-900 p-3 text-left text-xs leading-relaxed text-zinc-100 opacity-0 shadow-lg transition-opacity peer-hover:opacity-100 peer-focus:opacity-100">
-            {help}
-          </span>
+      {copy && (
+        <figcaption className="mt-2 px-1">
+          <p className="text-sm font-medium text-zinc-800">{copy.label}</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-zinc-500">{copy.hint}</p>
         </figcaption>
       )}
     </motion.figure>

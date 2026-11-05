@@ -13,7 +13,8 @@
     "@tanstack/react-query": "^5.106.0",
     "motion": "^14.9.1",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "shared": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.4",

@@ -3,8 +3,7 @@
   "private": true,
   "packageManager": "pnpm@10.28.0",
   "scripts": {
-    "infra": "docker compose up -d --wait",
-    "migrate": "pnpm --filter server migrate",
+    "infra": "docker compose up -d --wait && pnpm --filter server bootstrap",
     "dev": "pnpm -r --parallel dev",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test"

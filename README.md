@@ -29,8 +29,7 @@ git clone https://github.com/amantyagi22/aragon-first-round.git
 cd aragon-first-round
 cp .env.example .env     # local-only credentials for the docker services
 pnpm install
-pnpm infra               # starts Postgres 16 + SeaweedFS (S3-compatible) in Docker
-pnpm migrate             # creates the images table, enums, and indexes
+pnpm infra               # Postgres 16 + SeaweedFS in Docker, then bucket + CORS + migrations
 pnpm dev                 # API on :4000, worker, web on :5180 (Ctrl-C stops all three)
 ```
 
@@ -41,21 +40,22 @@ Open http://localhost:5180.
 Sample photos covering every rule are in `server/test/fixtures/`.
 Drag them all into the upload box at once:
 
-- `ok-selfie.jpg`, `ok-headshot.png`, `src/selfie.heic` go to **Accepted**.
+- `ok-selfie.jpg`, `ok-second-selfie.jpg`, `ok-headshot.png`, `portrait-mode.jpg`, `sideways-exif.jpg`, `src/selfie.heic` go to **Accepted**.
+- `near-duplicate.jpg` is a re-encoded crop of `ok-selfie.jpg`, so whichever of the two is processed second is rejected as too similar.
 - The rest go to **Rejected**, each labelled with its reason (hover the label for advice).
-- `not-an-image.jpg` is rejected by the server: its name says JPG but its bytes do not.
-- A `.gif` or `.pdf` is rejected in the browser before uploading.
+- `pdf-renamed.jpg` is a PDF named `.jpg`: rejected because its bytes are not an image.
+- `animation.gif` is rejected in the browser before uploading.
 
 The full QA script is under [Test cases](#test-cases).
 
 ### 3. Run the tests
 
 ```sh
-pnpm test                # needs `pnpm infra` + `pnpm migrate` first
+pnpm test                # needs `pnpm infra` first
 pnpm typecheck
 ```
 
-`pnpm test` runs 15 tests: every validation rule against real images, the HTTP API end to end through real storage and the worker, and a concurrency test for near-duplicates.
+`pnpm test` runs 32 tests, all through the public HTTP API with a real worker process: every validation rule, HEIC and EXIF handling, similarity (including a concurrency race), delete, idempotency, session isolation, storage-enforced limits, and real worker crashes (SIGKILL mid-job).
 
 ### 4. Where to look
 
@@ -74,8 +74,8 @@ pnpm typecheck
 
 - **`Port ... is already in use`**: a previous run is still alive. Run `lsof -i :5180 -i :4000` and stop it.
 - **`role "aragon" does not exist`**: `DATABASE_URL` is pointing at another Postgres. It should use port 5433 from `.env.example`.
-- **Tests fail to connect**: run `pnpm infra` and `pnpm migrate` first, and check `docker compose ps`.
-- **Start over with empty data**: `docker compose down -v`, then `pnpm infra && pnpm migrate`.
+- **Tests fail to connect**: run `pnpm infra` first, and check `docker compose ps`.
+- **Start over with empty data**: `docker compose down -v`, then `pnpm infra`.
 - **First face check is slow**: the face model loads on the worker's first job (about a second); later jobs are fast.
 
 ## API
@@ -84,7 +84,7 @@ All endpoints require an `X-Session-Id: <uuid>` header and only ever see that se
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/images` | Reserve a batch (`{ files: [{ filename, contentType, size }] }`, max 50) and get a presigned POST per file |
+| `POST` | `/api/images` | Reserve a batch (`{ files: [{ filename, contentType, size }] }`, max 20) and get a presigned POST per file |
 | `POST` | `/api/images/:id/complete` | Mark the upload finished; verifies the object exists, then queues it. Idempotent |
 | `GET` | `/api/images` | List the session's images with status, rejection reason, and a signed preview URL |
 | `GET` | `/api/images/:id` | Get one image |
@@ -117,7 +117,7 @@ sequenceDiagram
 
 1. Magic bytes: JPEG, PNG, HEIC only (extension and MIME are never trusted).
 2. File size at least 50 KB.
-3. HEIC converted with `heic-convert`, then `sharp` applies EXIF rotation and strips metadata.
+3. Decode (failure is `corrupt`): HEIC converted with `heic-convert`, then `sharp` applies EXIF rotation and strips metadata.
 4. Shortest side at least 512 px.
 5. Face detection (`@vladmandic/face-api` on the TF.js WASM backend): no face, multiple faces.
 6. Face area under 5% of the image: face too small.
@@ -132,13 +132,13 @@ sequenceDiagram
 | Postgres as the queue | One less moving part; SKIP LOCKED scales to many workers; 3 attempts then `failed` | SQS / BullMQ at very high volume |
 | Polling at 1s, only while work is pending | Simple, robust through proxies | SSE or LISTEN/NOTIFY |
 | dHash, not face embeddings | Embeddings of the same person always match; we want "same photo", not "same person" | Perceptual hash + embedding of background |
-| SeaweedFS locally | MinIO stopped publishing images; RustFS's POST-object upload is broken | Unset `S3_ENDPOINT` to use AWS S3 |
+| SeaweedFS locally | MinIO stopped publishing images; RustFS's POST-object upload is broken. Bucket and CORS are set by `pnpm infra` instead of an init container | Unset `S3_ENDPOINT` to use AWS S3 |
 | Anonymous `X-Session-Id` | No auth in scope; every query is still session-scoped | Real auth, same scoping |
 
 ## Security
 
 - Content type is decided by magic bytes on the server, not by extension or client MIME.
-- Upload size is capped at 25 MB by the presigned POST policy (`content-length-range`) and checked again on the client.
+- Upload size is capped at 120 MB by the presigned POST policy (`content-length-range`) and checked again on the client.
   AWS S3 enforces the policy; enforcement by the local SeaweedFS has not been verified.
 - The bucket is private; previews are short-lived signed GET URLs.
 - Images are decoded and re-encoded with `sharp`, which strips EXIF (including GPS); only the re-encoded JPEG is ever served back.
@@ -150,24 +150,27 @@ Automated (`pnpm test`), with fixtures derived from source photos by `pnpm --fil
 
 | Fixture | Expected |
 | --- | --- |
-| `ok-selfie.jpg` | Accepted |
-| `ok-headshot.png` | Accepted |
-| `src/selfie.heic` | Accepted (converted from HEIC) |
-| `not-an-image.jpg` | Rejected: invalid format (bad magic bytes behind a `.jpg` name) |
-| `tiny-bytes.jpg` | Rejected: file too small (< 50 KB) |
-| `low-res.jpg` | Rejected: resolution too small (< 512 px) |
-| `no-face.jpg` | Rejected: no face |
-| `multiple-faces.jpg` | Rejected: multiple faces |
-| `face-too-small.jpg` | Rejected: face too small (< 5% of the image) |
-| `blurry.jpg` | Rejected: blurry |
-| `ok-selfie.jpg` + `similar-selfie.jpg` | One accepted, one rejected as too similar, even when two workers process them at the same time |
+| `ok-selfie.jpg`, `ok-second-selfie.jpg`, `ok-headshot.png` | Accepted |
+| `src/selfie.heic` | Accepted, with a JPEG preview |
+| `portrait-mode.jpg` | Accepted (sharp face, blurred background) |
+| `sideways-exif.jpg` | Accepted, preview upright, no EXIF |
+| `pdf-renamed.jpg` | Rejected: `unsupported_format` |
+| `tiny-thumbnail.jpg` | Rejected: `file_too_small` (< 50 KB) |
+| `corrupt.jpg` | Rejected: `corrupt` (valid header, garbage body) |
+| `low-resolution.jpg` | Rejected: `low_resolution` (< 512 px) |
+| `no-face-landscape.jpg` | Rejected: `no_face` |
+| `group.jpg` | Rejected: `multiple_faces` |
+| `face-too-small.jpg` | Rejected: `face_too_small` (< 5% of the image) |
+| `blurry.jpg` | Rejected: `blurry` |
+| `ok-selfie.jpg` then `near-duplicate.jpg` | Second rejected: `too_similar`; accepted in a different session |
+| Both completed at the same moment | Exactly one accepted |
 
-The integration test also covers session isolation (another session gets 404), delete, a missing session header (401), and a disallowed content type (400).
+Also covered: delete frees the slot for a similar photo, double complete is idempotent, other sessions get 404, storage refuses oversized or wrong-type uploads, bad requests get 400/401, and a worker killed mid-job is reclaimed (or the image ends `failed` after 3 crashed attempts).
 
 Manual QA in the browser:
 
 1. Drop a `.gif` or `.pdf`: rejected instantly on the client, never uploaded.
-2. Drop a file over 25 MB: rejected instantly on the client.
+2. Drop a file over 120 MB: rejected instantly on the client.
 3. Drop a mixed batch of the fixtures: blurred previews with upload progress, then each tile moves into Accepted or Rejected.
 4. Hover a rejection reason: a tooltip explains how to fix it.
 5. Upload the same photo twice: the second is rejected as too similar.

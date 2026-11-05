@@ -1,8 +1,6 @@
-const API = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
+import { ACCEPTED_MIME_TYPES, MAX_FILES_PER_BATCH, sniffFormat, type ImageDto, type Reason } from 'shared';
 
-export type Status = 'pending_upload' | 'queued' | 'processing' | 'accepted' | 'rejected' | 'failed';
-export type Reason = 'invalid_format' | 'file_too_small' | 'resolution_too_small' | 'no_face' | 'multiple_faces' | 'face_too_small' | 'blurry' | 'too_similar';
-export type Image = { id: string; filename: string; status: Status; reason: Reason | null; url: string | null };
+const API = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 type Reservation = { id: string; upload: { url: string; fields: Record<string, string> } };
 
 // Anonymous identity, persisted per browser.
@@ -15,14 +13,23 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   return res.status === 204 ? (undefined as T) : res.json();
 }
 
-export const listImages = () => call<{ images: Image[] }>('').then((r) => r.images);
+export const listImages = () => call<{ images: ImageDto[] }>('').then((r) => r.images);
 export const deleteImage = (id: string) => call<void>(`/${id}`, { method: 'DELETE' });
-export const completeUpload = (id: string) => call<Image>(`/${id}/complete`, { method: 'POST' });
-export const reserveUploads = (files: File[]) =>
-  call<{ images: Reservation[] }>('', {
-    method: 'POST',
-    body: JSON.stringify({ files: files.map((f) => ({ filename: f.name, contentType: contentTypeOf(f), size: f.size })) }),
-  }).then((r) => r.images);
+export const completeUpload = (id: string) => call<ImageDto>(`/${id}/complete`, { method: 'POST' });
+
+/** Reserves rows + presigned POSTs, in batches the API accepts. */
+export async function reserveUploads(files: File[]): Promise<Reservation[]> {
+  const out: Reservation[] = [];
+  for (let i = 0; i < files.length; i += MAX_FILES_PER_BATCH) {
+    const batch = files.slice(i, i + MAX_FILES_PER_BATCH);
+    const { images } = await call<{ images: Reservation[] }>('', {
+      method: 'POST',
+      body: JSON.stringify({ files: batch.map((f) => ({ filename: f.name, contentType: contentTypeOf(f), size: f.size })) }),
+    });
+    out.push(...images);
+  }
+  return out;
+}
 
 /** XHR (not fetch) so we get upload progress. Bytes go straight to storage. */
 export function uploadToStorage(r: Reservation, file: File, onProgress: (pct: number) => void) {
@@ -39,21 +46,32 @@ export function uploadToStorage(r: Reservation, file: File, onProgress: (pct: nu
   });
 }
 
-// Browsers often report HEIC with an empty MIME type, so fall back to the extension.
-const BY_EXT: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', heic: 'image/heic', heif: 'image/heif' };
-export function contentTypeOf(f: File): string | null {
-  if (Object.values(BY_EXT).includes(f.type)) return f.type;
-  return BY_EXT[f.name.split('.').pop()?.toLowerCase() ?? ''] ?? null;
+const MIME_BY_FORMAT = { jpeg: 'image/jpeg', png: 'image/png', heic: 'image/heic' } as const;
+const MIME_BY_EXT: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', heic: 'image/heic', heif: 'image/heif' };
+
+/** Browsers often report HEIC with an empty MIME type, so fall back to the extension. */
+function contentTypeOf(f: File): string {
+  if ((ACCEPTED_MIME_TYPES as readonly string[]).includes(f.type)) return f.type;
+  return MIME_BY_EXT[f.name.split('.').pop()?.toLowerCase() ?? ''] ?? 'application/octet-stream';
 }
 
-export const REASON_COPY: Record<Reason | 'failed', [string, string]> = {
-  invalid_format: ['Unsupported format', 'Only JPG, PNG and HEIC photos are supported.'],
-  file_too_small: ['File too small', 'This file is under 50 KB, which usually means heavy compression. Upload the original photo.'],
-  resolution_too_small: ['Resolution too low', 'Photos need to be at least 512px on the shortest side.'],
-  no_face: ['No face detected', 'We could not find a face in this photo. Make sure your face is clearly visible.'],
-  multiple_faces: ['Multiple faces', 'Only you should be in the photo. Crop out or avoid other people.'],
-  face_too_small: ['Face is too far away', 'Your face takes up too little of the photo. Try a closer shot.'],
-  blurry: ['Blurry face detected', 'Your face looks out of focus. Use a sharper photo with good lighting.'],
-  too_similar: ['Too similar to another upload', 'You already uploaded a similar photo. Try different backgrounds, lighting and clothing.'],
-  failed: ['Processing failed', 'Something went wrong on our side. Delete and try again.'],
+/** Instant client check: extension and the file's real magic bytes must both say JPEG, PNG, or HEIC. */
+export async function isSupportedImage(f: File): Promise<boolean> {
+  if (!MIME_BY_EXT[f.name.split('.').pop()?.toLowerCase() ?? '']) return false;
+  const format = sniffFormat(new Uint8Array(await f.slice(0, 12).arrayBuffer()));
+  return !!format && !!MIME_BY_FORMAT[format];
+}
+
+/** Every rejection reason's user-facing copy, in one place. */
+export const REASON_COPY: Record<Reason | 'failed', { label: string; hint: string }> = {
+  unsupported_format: { label: 'Unsupported format', hint: 'Only JPG, PNG and HEIC photos are supported.' },
+  file_too_small: { label: 'File too small', hint: 'Upload the original photo, not a thumbnail or screenshot.' },
+  corrupt: { label: 'Unreadable file', hint: 'This file looks damaged. Export the photo again and re-upload.' },
+  low_resolution: { label: 'Resolution too low', hint: 'Use a photo at least 512px on its shortest side.' },
+  no_face: { label: 'No face detected', hint: 'Make sure your face is clearly visible.' },
+  multiple_faces: { label: 'Multiple faces', hint: 'Only you should be in the photo.' },
+  face_too_small: { label: 'Face is too far away', hint: 'Try a closer shot where your face fills more of the frame.' },
+  blurry: { label: 'Blurry face', hint: 'Use a sharper photo with good lighting.' },
+  too_similar: { label: 'Too similar to another upload', hint: 'Try a different background, lighting, or outfit.' },
+  failed: { label: 'Something went wrong on our side', hint: 'This is not your photo. Delete it and upload it again.' },
 };

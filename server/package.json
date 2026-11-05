@@ -8,10 +8,10 @@
     "dev:worker": "node --env-file=../.env --import tsx --watch src/worker.ts",
     "api": "node --env-file=../.env --import tsx src/api.ts",
     "worker": "node --env-file=../.env --import tsx src/worker.ts",
-    "migrate": "node --env-file=../.env --import tsx src/migrate.ts",
     "fixtures": "node --import tsx scripts/make-fixtures.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bootstrap": "node --env-file=../.env --import tsx src/setup.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1162.0",
@@ -27,6 +27,7 @@
     "helmet": "^8.3.0",
     "knex": "^3.3.0",
     "pg": "^8.23.1",
+    "shared": "workspace:*",
     "sharp": "^0.35.5",
     "zod": "^4.6.7"
   },
