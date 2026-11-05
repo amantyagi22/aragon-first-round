@@ -42,9 +42,16 @@ Drag them all into the upload box at once:
 
 - `ok-selfie.jpg`, `ok-second-selfie.jpg`, `ok-headshot.png`, `portrait-mode.jpg`, `sideways-exif.jpg`, `src/selfie.heic` go to **Accepted**.
 - `near-duplicate.jpg` is a re-encoded crop of `ok-selfie.jpg`, so whichever of the two is processed second is rejected as too similar.
-- The rest go to **Rejected**, each labelled with its reason and a hint on how to fix it.
+- The rest go to **Needs attention**, each labelled with its reason and a hint on how to fix it.
 - `pdf-renamed.jpg` is a PDF named `.jpg`: rejected because its bytes are not an image.
 - `animation.gif` is rejected in the browser before uploading.
+
+To tidy up afterwards:
+
+- The trash icon on a card deletes that one photo.
+- **Delete all** in the Needs attention header deletes every rejected or failed photo, after a confirmation.
+  Accepted photos are never touched by it.
+- The ✕ next to **Uploads** only hides finished rows from the upload list; it deletes nothing, and the cards keep their previews.
 
 The full QA script is [docs/QA.md](docs/QA.md); the recording outline is [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md).
 
@@ -183,12 +190,14 @@ Manual QA in the browser:
 
 1. Drop a `.gif` or `.pdf`: rejected instantly on the client, never uploaded.
 2. Drop a file over 120 MB: rejected instantly on the client.
-3. Drop a mixed batch of the fixtures: blurred previews with upload progress, then each tile moves into Accepted or Rejected.
+3. Drop a mixed batch of the fixtures: blurred previews with upload progress, then each tile moves into Accepted or Needs attention.
 4. Look at a rejected card: its reason and a fix hint are shown under the photo.
 5. Upload the same photo twice: the second is rejected as too similar.
 6. Delete an image: it disappears and the accepted counter updates.
-7. Reload the page: the gallery is restored from the server for the same session.
-8. Stop the worker, upload, then start it: images wait as queued and are processed once it is back.
+7. Click **Delete all** on Needs attention and confirm: every rejected photo is deleted, accepted ones stay.
+8. Click the ✕ next to Uploads: the upload list hides, every card keeps its preview.
+9. Reload the page: the gallery is restored from the server for the same session.
+10. Stop the worker, upload, then start it: images wait as queued and are processed once it is back.
 
 ## What I would do next
 

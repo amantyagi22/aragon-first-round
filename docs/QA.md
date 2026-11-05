@@ -47,6 +47,8 @@ Drop these together and watch each card move from the blurred, shimmering "Check
 ## Managing the set
 
 - [ ] Delete an accepted photo: it disappears instantly and the counter drops.
+- [ ] Click **Delete all** on Needs attention: a confirmation appears; after confirming, every rejected and failed photo is gone and accepted photos remain.
+- [ ] Click the ✕ next to Uploads: the upload list hides, nothing is deleted, and every card (including `tiny-thumbnail.jpg`) keeps its preview.
 - [ ] Upload `near-duplicate.jpg` again after deleting `ok-selfie.jpg`: now accepted.
 - [ ] Reload the page: all images come back from the server.
 - [ ] Stop the worker (Ctrl-C), upload a photo, and see it wait in "Queued"; restart with `pnpm dev` and it gets processed.
